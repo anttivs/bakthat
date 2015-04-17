@@ -2,6 +2,14 @@
 Bakthat
 =======
 
+Branch notice
+-------------
+
+This is a branch of bakthat that supports symmetric encryption using GnuPG (GPG). The original bakthat is at https://github.com/tsileo/bakthat
+
+Original readme follows
+-----------------------
+
 I stopped working on bakthat, I'm now working on another backup-related project: `blobstash <https://github.com/tsileo/blobstash>`_/`blobsnap <https://github.com/tsileo/blobsnap>`_.
 If somebody want to be a collaborator and continue development, please open an issue.
 
