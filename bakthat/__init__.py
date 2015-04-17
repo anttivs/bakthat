@@ -18,6 +18,7 @@ from gzip import GzipFile
 
 import yaml
 from beefish import decrypt, encrypt_file
+import gnupg
 import aaargh
 import grandfatherson
 from byteformat import ByteFormatter
@@ -212,7 +213,8 @@ def _get_exclude(exclude_file):
 @app.cmd_arg('-k', '--key', type=str, default=None, help="Custom key for periodic backups (works only with BakManager.io hook.)")
 @app.cmd_arg('--exclude-file', type=str, default=None)
 @app.cmd_arg('--s3-reduced-redundancy', action="store_true")
-def backup(filename=os.getcwd(), destination=None, profile="default", config=CONFIG_FILE, prompt="yes", tags=[], key=None, exclude_file=None, s3_reduced_redundancy=False, **kwargs):
+@app.cmd_arg('--use-beefish', action="store_true", default=False, help="Use beefish")
+def backup(filename=os.getcwd(), destination=None, profile="default", config=CONFIG_FILE, prompt="yes", tags=[], key=None, exclude_file=None, s3_reduced_redundancy=False, use_beefish=False, **kwargs):
     """Perform backup.
 
     :type filename: str
@@ -328,13 +330,24 @@ def backup(filename=os.getcwd(), destination=None, profile="default", config=CON
         bakthat_compression = True
 
     bakthat_encryption = False
+    use_beefish = kwargs.get("use_beefish")
+    
     if password:
-        bakthat_encryption = True
+        if use_beefish is True:
+            bakthat_encryption = 'beefish'
+        else:
+            bakthat_encryption = 'gpg'
         log.info("Encrypting...")
         encrypted_out = tempfile.NamedTemporaryFile(delete=False)
-        encrypt_file(outname, encrypted_out.name, password)
-        stored_filename += ".enc"
-
+        if use_beefish is True:
+            encrypt_file(outname, encrypted_out.name, password)
+            stored_filename += ".enc"
+        else:
+            gpg = gnupg.GPG()
+            readout = open(outname, "rb")
+            gpg.encrypt_file(readout, None, passphrase=password, symmetric='AES256', armor=False, output=encrypted_out.name)
+            stored_filename += '.gpg'
+            
         # We only remove the file if the archive is created by bakthat
         if bakthat_compression:
             os.remove(outname)  # remove non-encrypted tmp file
@@ -514,7 +527,7 @@ def restore(filename, destination=None, profile="default", config=CONFIG_FILE, *
     log.info("Restoring " + key_name)
 
     # Asking password before actually download to avoid waiting
-    if key_name and backup.is_encrypted():
+    if key_name and (backup.is_encrypted() or backup.is_gpg_encrypted()):
         password = kwargs.get("password")
         if not password:
             password = getpass()
@@ -538,7 +551,15 @@ def restore(filename, destination=None, profile="default", config=CONFIG_FILE, *
         decrypt(out, decrypted_out, password)
         out = decrypted_out
 
-    if out and (key_name.endswith(".tgz") or key_name.endswith(".tgz.enc")):
+    if out and backup.is_gpg_encrypted():
+        log.info("Decrypting...")
+        decrypted_out = tempfile.NamedTemporaryFile()
+        gpg = gnupg.GPG()
+        gpg.decrypt_file(out, output=decrypted_out.name, passphrase=password)
+        out = decrypted_out
+
+    if out and (key_name.endswith(".tgz") or key_name.endswith(".tgz.enc")
+                or key_name.endswith(".tgz.gpg")):
         log.info("Uncompressing...")
         out.seek(0)
         if not backup.metadata.get("KeyValue"):

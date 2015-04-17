@@ -9,3 +9,4 @@ pycrypto
 requests
 sh
 events
+python-gnupg

@@ -7,6 +7,7 @@ import shutil
 import time
 import hashlib
 import json
+import gnupg
 from StringIO import StringIO
 from gzip import GzipFile
 
@@ -69,11 +70,21 @@ class KeyValue(S3Backend):
             f.close()
             fileobj = StringIO(out.getvalue())
 
+        use_beefish = kwargs.get("use_beefish")
+        if use_beefish is False:
+            gpg = gnupg.GPG()
+        
         password = kwargs.get("password")
         if password:
-            backup["metadata"]["is_enc"] = True
-            out = StringIO()
-            encrypt(fileobj, out, password)
+             if use_beefish is True:
+                out = StringIO()
+                backup["metadata"]["is_enc"] = 'beefish'
+                encrypt(fileobj, out, password)
+            else:
+                out = tempfile.TemporaryFile()
+                backup["metadata"]["is_enc"] = 'gpg'
+                gpg.encrypt_file(fileobj, None, passphrase=password, symmetric='AES256', armor=False, output=out.name)
+
             fileobj = out
         # Creating the object on S3
         k.set_contents_from_string(fileobj.getvalue())
@@ -106,6 +117,13 @@ class KeyValue(S3Backend):
             if backup.is_encrypted():
                 out = StringIO()
                 decrypt(fileobj, out, kwargs.get("password"))
+                fileobj = out
+                fileobj.seek(0)
+
+            if backup.is_gpg_encrypted():
+                out = tempfile.TemporaryFile()
+                gpg = gnupg.GPG()
+                gpg.decrypt(fileobj, output=out.name, passphrase=kwargs.get("password"))
                 fileobj = out
                 fileobj.seek(0)
 

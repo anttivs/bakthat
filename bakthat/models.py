@@ -144,7 +144,10 @@ class Backups(SyncedModel):
         self.save()
 
     def is_encrypted(self):
-        return self.stored_filename.endswith(".enc") or self.metadata.get("is_enc")
+        return self.stored_filename.endswith(".enc") or self.metadata.get("is_enc" == 'beefish')
+
+    def is_gpg_encrypted(self):
+        return self.stored_filename.endswith(".gpg") or self.metadata.get("is_enc" == 'gpg')
 
     def is_gzipped(self):
         return self.metadata.get("is_gzipped")
